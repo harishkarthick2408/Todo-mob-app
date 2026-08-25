@@ -38,8 +38,11 @@
     <!-- Permissions -->
     <!-- Deliberately NO android.permission.INTERNET: this app never makes a -->
     <!-- network request, so the permission is omitted rather than granted -->
-    <!-- and unused (least-privilege). VIBRATE is needed for haptic -->
-    <!-- reminders; POST_NOTIFICATIONS/RECEIVE_BOOT_COMPLETED/WAKE_LOCK are -->
-    <!-- contributed automatically by the local-notifications plugin. -->
+    <!-- (least-privilege model). -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 </manifest>

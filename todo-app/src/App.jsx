@@ -156,7 +156,11 @@ export default function App() {
   }
 
   function updateSettings(patch) {
-    setState((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }))
+    setState((prev) => {
+      const nextSettings = { ...prev.settings, ...patch }
+      rescheduleAll(prev.tasks, nextSettings)
+      return { ...prev, settings: nextSettings }
+    })
   }
 
   if (!state) {

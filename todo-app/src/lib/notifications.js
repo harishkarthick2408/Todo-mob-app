@@ -11,14 +11,53 @@ import { parseLocalDateTime } from './recurrence.js'
 // an additional belt-and-suspenders pass run once on every app launch.
 
 let actionsRegistered = false
+const createdChannels = new Set()
 
 export async function ensurePermissions() {
-  const perm = await LocalNotifications.checkPermissions()
-  if (perm.display !== 'granted') {
-    const req = await LocalNotifications.requestPermissions()
-    return req.display === 'granted'
+  try {
+    const perm = await LocalNotifications.checkPermissions()
+    if (perm.display !== 'granted') {
+      const req = await LocalNotifications.requestPermissions()
+      return req.display === 'granted'
+    }
+    return true
+  } catch (e) {
+    console.warn('Notification permission error:', e)
+    return false
   }
-  return true
+}
+
+/**
+ * On Android 8+ (Oreo+), notification channels lock vibration and sound settings
+ * upon creation. We create dedicated channels matching sound & vibration user settings
+ * to ensure in-app toggles are strictly respected at the OS level.
+ */
+export async function setupNotificationChannel(settings) {
+  const soundEnabled = settings?.soundEnabled ?? true
+  const vibrationEnabled = settings?.vibrationEnabled ?? true
+
+  const channelId = `privado_reminders_v${vibrationEnabled ? '1' : '0'}_s${soundEnabled ? '1' : '0'}`
+
+  if (createdChannels.has(channelId)) return channelId
+
+  try {
+    await LocalNotifications.createChannel({
+      id: channelId,
+      name: `Task Reminders${!soundEnabled ? ' (Silent)' : ''}${!vibrationEnabled ? ' (No Vibe)' : ''}`,
+      description: 'Notifications for scheduled task reminders',
+      importance: soundEnabled || vibrationEnabled ? 5 : 3, // 5 = High/Max, 3 = Default
+      visibility: 1, // Public
+      sound: soundEnabled ? 'notify_soft.wav' : undefined,
+      vibration: vibrationEnabled,
+      lights: true,
+      lightColor: '#6FA08C',
+    })
+    createdChannels.add(channelId)
+  } catch (e) {
+    console.warn('Failed to create notification channel:', e)
+  }
+
+  return channelId
 }
 
 export async function registerActionTypes() {
@@ -64,22 +103,30 @@ export async function scheduleTaskReminder(task, settings) {
   const trigger = computeTriggerDate(task)
   if (!trigger || trigger.getTime() <= Date.now()) return
 
+  await ensurePermissions()
   await registerActionTypes()
+  const channelId = await setupNotificationChannel(settings)
   const id = idFor(task.id)
-  await LocalNotifications.schedule({
-    notifications: [
-      {
-        id,
-        title: task.title,
-        body: task.description || (task.time ? `Due at ${task.time}` : 'Task reminder'),
-        schedule: { at: trigger, allowWhileIdle: true },
-        sound: settings.soundEnabled ? 'notify_soft.wav' : undefined,
-        actionTypeId: 'TASK_REMINDER',
-        extra: { taskId: task.id },
-        smallIcon: 'ic_stat_notify',
-      },
-    ],
-  })
+
+  try {
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id,
+          title: task.title,
+          body: task.description || (task.time ? `Due at ${task.time}` : 'Task reminder'),
+          schedule: { at: trigger, allowWhileIdle: true },
+          sound: settings.soundEnabled ? 'notify_soft.wav' : undefined,
+          channelId: channelId,
+          actionTypeId: 'TASK_REMINDER',
+          extra: { taskId: task.id },
+          smallIcon: 'ic_stat_notify',
+        },
+      ],
+    })
+  } catch (e) {
+    console.warn('Failed to schedule local notification:', e)
+  }
 }
 
 export async function cancelTaskReminder(task) {
@@ -111,7 +158,11 @@ export async function vibrateOnce(enabled) {
 }
 
 export function onNotificationAction(handler) {
-  LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
-    handler(event.actionId, event.notification?.extra?.taskId)
-  })
+  try {
+    LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+      handler(event.actionId, event.notification?.extra?.taskId)
+    })
+  } catch {
+    // Ignored in browser preview
+  }
 }
