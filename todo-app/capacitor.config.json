@@ -1,0 +1,15 @@
+{
+  "appId": "com.harish.privado",
+  "appName": "Privado",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#5B8C7B",
+      "sound": "notify_soft.wav"
+    }
+  }
+}
